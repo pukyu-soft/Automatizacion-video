@@ -1,5 +1,11 @@
 """Almacén mínimo de trabajos: un JSON por job en storage/jobs/ (escritura atómica)."""
-import json, os, re, threading, time, uuid
+import json
+import os
+import re
+import tempfile
+import threading
+import time
+import uuid
 from .config import JOBS
 
 _lock = threading.Lock()
@@ -21,9 +27,25 @@ def _read(job_id: str) -> dict:
 
 def _write(job: dict):
     f = _file(job["id"])
-    tmp = f.with_suffix(".tmp")
-    tmp.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, f)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=JOBS, prefix=f".{job['id']}.", suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp.write(json.dumps(job, ensure_ascii=False))
+            tmp_path = tmp.name
+        for attempt in range(4):
+            try:
+                os.replace(tmp_path, f)
+                break
+            except PermissionError:
+                if attempt == 3:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def create(**fields) -> dict:

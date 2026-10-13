@@ -1,5 +1,6 @@
 import secrets
 import logging
+import math
 import shutil
 import hashlib
 import hmac
@@ -224,6 +225,9 @@ class GenerateIn(BaseModel):
     subtitle_style: str = "clasico"
     font_name: str = "Impact"
     max_words: int = 4
+    narration_speed: float = 1.0
+    video_volume: float = 20
+    narration_volume: float = 100
 
 
 def _validate_options(body: GenerateIn) -> None:
@@ -240,6 +244,13 @@ def _validate_options(body: GenerateIn) -> None:
         raise HTTPException(400, "Estilo de subtítulos no válido.")
     if not 1 <= body.max_words <= 8:
         raise HTTPException(400, "La cantidad de palabras debe estar entre 1 y 8.")
+    if any(
+        not math.isfinite(volume) or not 0 <= volume <= 200
+        for volume in (body.video_volume, body.narration_volume)
+    ):
+        raise HTTPException(400, "Los volúmenes deben estar entre 0 % y 200 %.")
+    if not math.isfinite(body.narration_speed) or not 0.75 <= body.narration_speed <= 1.25:
+        raise HTTPException(400, "La velocidad de narración debe estar entre 0,75× y 1,25×.")
     fonts = {p.stem for p in FONTS_DIR.glob("*") if p.is_file() and p.suffix.lower() in FONT_EXT}
     if body.font_name != "Impact" and body.font_name not in fonts:
         raise HTTPException(400, "Fuente no disponible.")
@@ -269,6 +280,9 @@ def _save_generation_options(job_id: str, body: GenerateIn) -> str:
         subtitle_style=body.subtitle_style,
         font_name=body.font_name,
         max_words=body.max_words,
+        narration_speed=body.narration_speed,
+        video_volume=body.video_volume,
+        narration_volume=body.narration_volume,
         **({"title": body.title.strip()[:120]} if body.title and body.title.strip() else {}),
     )
     return script
@@ -302,7 +316,8 @@ def status(job_id: str):
 
 @app.get("/api/jobs/{job_id}/duration")
 def job_duration(job_id: str):
-    return {"duration": probe(_job(job_id)["video_path"])["duration"]}
+    info = probe(_job(job_id)["video_path"])
+    return {"duration": info["duration"], "has_audio": info["has_audio"]}
 
 
 @app.post("/api/jobs/{job_id}/preview")
@@ -344,7 +359,9 @@ def preview_data(job_id: str, body: GenerateIn):
     raw = pipeline.get_tts_audio(script, body.voice, body.style)
     fitted = str(AUDIO / f"{job_id}_fit.wav")
     try:
-        _, duration = fit_audio(raw, video_duration, fitted, body.duration_mode)
+        _, duration = fit_audio(
+            raw, video_duration, fitted, body.duration_mode, body.narration_speed
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
     try:

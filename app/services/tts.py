@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import logging
 import os
 import subprocess
 import tempfile
@@ -9,6 +10,8 @@ import requests
 
 from ..config import env
 from .voices import STYLES, get_voice
+
+logger = logging.getLogger(__name__)
 
 
 def synthesize(text: str, out_base: str, voice_id: str = "edge-jorge", style: str = "relajado") -> str:
@@ -57,9 +60,26 @@ def synthesize(text: str, out_base: str, voice_id: str = "edge-jorge", style: st
     if voice["engine"] == "edge":
         import edge_tts
 
-        asyncio.run(edge_tts.Communicate(
-            text, voice["voice"], rate=settings["rate"], pitch=settings["pitch"]
-        ).save(str(out)))
+        try:
+            asyncio.run(edge_tts.Communicate(
+                text, voice["voice"], rate=settings["rate"], pitch=settings["pitch"]
+            ).save(str(out)))
+        except Exception as error:
+            status = getattr(error, "status", None)
+            logger.warning(
+                "Edge TTS failed (status=%s, type=%s)", status, type(error).__name__
+            )
+            if status == 403:
+                message = (
+                    "Microsoft Edge TTS rechazó la conexión (HTTP 403). "
+                    "Prueba una voz local disponible o revisa la conexión/proxy."
+                )
+            else:
+                message = (
+                    "No se pudo conectar con Microsoft Edge TTS. "
+                    "Prueba una voz local disponible o revisa la conexión."
+                )
+            raise RuntimeError(message) from None
         return str(out)
 
     if voice["engine"] == "elevenlabs":

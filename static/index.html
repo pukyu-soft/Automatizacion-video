@@ -120,7 +120,7 @@
             <select id="music"><option value="">Sin música</option></select>
           </label>
         </div>
-        <p class="hint" id="ttsHint">La narración se crea automáticamente desde el guion; no necesitas subir ni grabar audio.</p>
+        <p class="hint" id="ttsHint">Las voces masculinas en línea requieren conexión a internet. Las voces locales solo aparecen si están instaladas en este equipo; si una muestra falla, se mostrará el motivo.</p>
         <div class="row">
           <button type="button" class="ghost" id="btnSample">▶ Escuchar muestra</button>
           <audio id="sample" controls hidden></audio>
@@ -162,15 +162,32 @@
         <video id="previewVideo" controls playsinline hidden></video>
         <div class="live" id="live" hidden>
           <video id="lvBg" muted loop playsinline></video>
-          <video id="lvMid" muted loop playsinline></video>
+          <video id="lvMid" loop playsinline></video>
           <video id="lvChar" muted loop playsinline></video>
-          <div id="lvTitle"></div><div id="lvSub"></div><div id="lvKar"></div>
+          <div id="lvTitle"></div><div id="lvKar"></div>
           <audio id="lvAudio"></audio>
         </div>
       </div>
       <div class="row preview-controls" id="liveControls" hidden>
         <button type="button" class="ghost" id="btnReplay">▶ Reproducir de nuevo</button>
         <button type="button" class="ghost" id="btnStopLive">Cerrar vista</button>
+      </div>
+      <div class="audio-mix-controls" id="audioMixControls" hidden>
+        <strong>Mezcla de audio</strong>
+        <p class="hint">Escucha la vista instantánea y ajusta estos niveles antes de generar.</p>
+        <label class="field" for="narrationVolume">
+          Narración <output id="narrationVolumeValue" for="narrationVolume">100 %</output>
+          <input id="narrationVolume" type="range" min="0" max="200" step="5" value="100">
+        </label>
+        <label class="field" for="narrationSpeed">
+          Velocidad de narración <output id="narrationSpeedValue" for="narrationSpeed">100 %</output>
+          <input id="narrationSpeed" type="range" min="75" max="125" step="5" value="100">
+        </label>
+        <label class="field" for="videoVolume">
+          Audio del video central <output id="videoVolumeValue" for="videoVolume">20 %</output>
+          <input id="videoVolume" type="range" min="0" max="200" step="5" value="20">
+        </label>
+        <p class="hint" id="sourceAudioHint" hidden></p>
       </div>
       <div class="actions" id="actions" hidden>
         <a id="dl" class="primary" href="#">⬇ Descargar</a>
