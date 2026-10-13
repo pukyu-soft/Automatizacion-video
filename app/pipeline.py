@@ -1,73 +1,186 @@
+import hashlib
+import threading
 import traceback
+from pathlib import Path
+
 from . import jobs
-from .config import AUDIO, WORK, OUTPUT, TTS_ENGINE, LANGUAGE
-from .services.probe import probe
-from .services.transcribe import transcribe, estimate_words
-from .services.tts import synthesize
+from .config import AUDIO, LANGUAGE, OUTPUT, WORK
 from .services.audio_fit import fit_audio
-from .services.subtitles import build_ass
-from .services.render import render
 from .services.notify import send_telegram
+from .services.probe import probe
+from .services.render import render
+from .services.subtitles import build_ass
+from .services.text_clean import clean_script
+from .services.transcribe import estimate_words, transcribe
+from .services.tts import synthesize
+from .services.voices import get_voice
+
+_cancel_lock = threading.Lock()
+_cancel_events: dict[str, threading.Event] = {}
+_tts_lock = threading.Lock()
+
+
+def cancel_job(job_id: str) -> None:
+    with _cancel_lock:
+        _cancel_events.setdefault(job_id, threading.Event()).set()
+
+
+def reset_cancel(job_id: str) -> None:
+    with _cancel_lock:
+        _cancel_events[job_id] = threading.Event()
+
+
+def _cancelled(job_id: str) -> bool:
+    with _cancel_lock:
+        event = _cancel_events.setdefault(job_id, threading.Event())
+    return event.is_set()
+
+
+def _check_cancel(job_id: str) -> None:
+    if _cancelled(job_id):
+        raise InterruptedError("Trabajo cancelado.")
+
+
+def get_tts_audio(script: str, voice: str, style: str = "relajado") -> str:
+    script = clean_script(script)
+    if not script:
+        raise ValueError("Escribe un guion antes de generar la voz.")
+    key = hashlib.sha256(f"{voice}|{style}|{script}".encode("utf-8")).hexdigest()[:24]
+    suffix = ".wav" if get_voice(voice)["engine"] in {"xtts", "sapi"} else ".mp3"
+    path = AUDIO / f"tts_{key}{suffix}"
+    with _tts_lock:
+        if not path.exists():
+            temporary = path.with_name(path.stem + ".tmp" + suffix)
+            try:
+                generated = Path(synthesize(script, str(temporary.with_suffix("")), voice, style))
+                generated.replace(path)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return str(path)
+
+
+def _audio_for(job: dict, script: str) -> str:
+    voice = job.get("voice")
+    if voice:
+        return get_tts_audio(script, voice, job.get("style", "relajado"))
+    if job.get("audio_path"):
+        return job["audio_path"]
+    raise RuntimeError("Elige una voz o sube una narración.")
+
+
+def _words_for(audio: str, script: str, duration: float) -> list:
+    try:
+        _, words = transcribe(audio, LANGUAGE)
+    except Exception:
+        words = []
+    return words or estimate_words(script, duration)
+
+
+def _prepare(job_id: str, job: dict, preview: bool = False) -> tuple[str, Path, float, float]:
+    script = clean_script(job.get("script", ""))
+    if not script:
+        raise RuntimeError("El guion está vacío. Escribe la narración antes de continuar.")
+    job = jobs.update(job_id, script=script)
+    work = WORK / job_id
+    work.mkdir(parents=True, exist_ok=True)
+    video_duration = probe(job["video_path"])["duration"]
+    _check_cancel(job_id)
+
+    if job.get("voice"):
+        jobs.update(job_id, status="tts", progress=20)
+    raw = _audio_for(job, script)
+    _check_cancel(job_id)
+    jobs.update(job_id, status="fitting", progress=40)
+    fitted = str(AUDIO / f"{job_id}_fit.wav")
+    _, duration = fit_audio(
+        raw, video_duration, fitted, job.get("duration_mode", "speed")
+    )
+    if preview:
+        duration = min(duration, 10.0)
+    jobs.update(job_id, status="subtitles", progress=55)
+    words = _words_for(fitted, script, duration)
+    _check_cancel(job_id)
+
+    ass = work / "subs.ass"
+    build_ass(
+        job.get("title", ""), words, duration, str(ass),
+        max_words=int(job.get("max_words", 4)),
+        style=job.get("subtitle_style", "clasico"),
+        font_name=job.get("font_name", "Impact"),
+        title_color=job.get("title_color", "verde"),
+        title_style=job.get("title_style", "clasico"),
+    )
+    return fitted, ass, duration, video_duration
 
 
 def step_transcribe(job_id: str):
-    """Paso 1: transcribe tu audio guía para que puedas editar el guion."""
+    """Transcribe el audio guía, si existe, y deja el trabajo listo para editar."""
     try:
         job = jobs.get(job_id)
         if job.get("audio_path"):
             jobs.update(job_id, status="transcribing", progress=10)
+            _check_cancel(job_id)
             try:
                 text, _ = transcribe(job["audio_path"], LANGUAGE)
-                jobs.update(job_id, script=text)
-            except Exception as e:  # sin Whisper: escribes el guion a mano
+                jobs.update(job_id, script=clean_script(text))
+            except Exception as e:
                 jobs.update(job_id, notice=f"No pude transcribir ({type(e).__name__}). Escribe el guion a mano.")
+        _check_cancel(job_id)
         jobs.update(job_id, status="script_ready", progress=0)
+    except InterruptedError:
+        jobs.update(job_id, status="cancelled", progress=0)
     except Exception as e:
         jobs.update(job_id, status="error", error=f"{e}\n{traceback.format_exc(limit=3)}")
 
 
 def step_generate(job_id: str):
-    """Paso 2: voz → ajuste → tiempos → subtítulos → render → entrega."""
+    """Genera audio, subtítulos y el render final."""
     try:
         job = jobs.get(job_id)
-        script = job["script"].strip()
-        work = WORK / job_id
-        work.mkdir(exist_ok=True)
-
         jobs.update(job_id, status="analyzing", progress=5)
-        duration = probe(job["video_path"])["duration"]
-
-        if TTS_ENGINE != "none" and script:
-            jobs.update(job_id, status="tts", progress=20)
-            raw = synthesize(script, str(AUDIO / f"{job_id}_tts"))
-        elif job.get("audio_path"):
-            raw = job["audio_path"]
-        else:
-            raise RuntimeError("No hay audio: graba tu narración o configura TTS_ENGINE.")
-
-        jobs.update(job_id, status="fitting", progress=40)
-        fitted = str(AUDIO / f"{job_id}_fit.wav")
-        fit_audio(raw, duration, fitted)
-
-        jobs.update(job_id, status="subtitles", progress=55)
-        try:
-            _, words = transcribe(fitted, LANGUAGE)
-        except Exception:
-            words = []
-        if not words:                                   # plan B sin Whisper
-            words = estimate_words(script, duration)
-        ass = work / "subs.ass"
-        build_ass(job["title"], words, duration, str(ass))
+        fitted, ass, duration, video_duration = _prepare(job_id, job)
+        _check_cancel(job_id)
 
         jobs.update(job_id, status="rendering", progress=70)
         out = OUTPUT / f"{job_id}.mp4"
-        render(job["video_path"], fitted, ass, duration, out, job.get("mode", "fill"),
-               on_progress=lambda p: jobs.update(job_id, progress=int(70 + p * 28)))
-
+        render(
+            job["video_path"], fitted, ass, duration, out, job.get("mode", "fill"),
+            on_progress=lambda p: jobs.update(job_id, progress=int(70 + p * 28)),
+            character=job.get("character"), character_path=job.get("character_path"),
+            music=job.get("music"),
+            source_duration=video_duration, cancelled=lambda: _cancelled(job_id),
+        )
+        _check_cancel(job_id)
         jobs.update(job_id, status="done", progress=100, output=str(out))
         try:
             send_telegram(str(out), job["title"], job_id)
         except Exception:
             pass
+    except InterruptedError:
+        jobs.update(job_id, status="cancelled", progress=0)
+    except Exception as e:
+        jobs.update(job_id, status="error", error=str(e))
+
+
+def step_preview(job_id: str):
+    """Renderiza los primeros diez segundos en calidad baja para revisión."""
+    try:
+        job = jobs.get(job_id)
+        jobs.update(job_id, status="preview", progress=5, preview_ready=False)
+        fitted, ass, duration, video_duration = _prepare(job_id, job, preview=True)
+        _check_cancel(job_id)
+
+        jobs.update(job_id, status="preview", progress=70)
+        out = OUTPUT / f"{job_id}_preview.mp4"
+        render(
+            job["video_path"], fitted, ass, duration, out, job.get("mode", "fill"),
+            preview=True, character=job.get("character"),
+            character_path=job.get("character_path"), music=job.get("music"),
+            source_duration=video_duration, cancelled=lambda: _cancelled(job_id),
+        )
+        _check_cancel(job_id)
+        jobs.update(job_id, status="script_ready", progress=100, preview_ready=True)
+    except InterruptedError:
+        jobs.update(job_id, status="cancelled", progress=0)
     except Exception as e:
         jobs.update(job_id, status="error", error=str(e))

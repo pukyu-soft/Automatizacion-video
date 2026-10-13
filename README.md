@@ -1,9 +1,9 @@
 # VideoStudio (versión mínima)
 
-Sube un video, graba tu narración y presiona **Generar**. Obtienes un video vertical 1080x1920:
+Sube el video original y el clip de tu personaje, escribe un guion y presiona **Generar**. VideoStudio crea la narración desde el texto y produce un video vertical 1080x1920:
 
 ```
-┌────────────────────┐  0-330     Título (verde) sobre el mismo video con blur
+┌────────────────────┐  0-330     Título con color y estilo seleccionables
 ├────────────────────┤  330-1290  Video original (recortado o completo) + subtítulos
 ├────────────────────┤  1290-1920 Tu personaje en loop + subtítulos karaoke (palabra activa en amarillo)
 └────────────────────┘
@@ -16,21 +16,20 @@ Sube un video, graba tu narración y presiona **Generar**. Obtienes un video ver
 sudo apt install -y ffmpeg python3-venv        # Ubuntu/Debian
 
 # 2. Entorno
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv
+# Windows: .venv\Scripts\Activate.ps1
+# Ubuntu/Debian: source .venv/bin/activate
+python -m pip install -r requirements.txt
 
 # 3. Configuración
 cp .env.example .env                           # edítalo si quieres voz clonada, Telegram, etc.
 
-# 4. Tu clip de personaje (loop, de preferencia 1080x630 o más ancho)
-cp /ruta/a/tu_clip.mp4 assets/personaje_loop.mp4
-
-# 5. Arrancar
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+# 4. Arrancar
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 # abre http://localhost:8000
 ```
 
-Sin `assets/personaje_loop.mp4` el sistema usa un fondo morado liso en esa zona, así puedes probar todo antes de tener el clip.
+En Windows, ejecuta la app con el mismo entorno donde instalaste sus dependencias: activa `.venv\Scripts\Activate.ps1` y arranca con `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`. La voz local de Sabina está seleccionada primero; Edge TTS queda disponible como alternativa. Si la página conserva voces o pasos antiguos, reinicia el servidor desde `.venv` y recarga el navegador.
 
 ## Uso por consola (sin web)
 
@@ -65,23 +64,23 @@ videostudio/
 
 ## Cómo funciona el flujo web
 
-1. **Paso 1**: eliges el video, escribes el título y el modo (*Recortar y llenar* o *Completo*).
-2. **Paso 2**: grabas tu narración en el navegador o subes un audio (opcional).
-3. Se transcribe con Whisper y aparece el **guion editable**. Si Whisper no está disponible, escribes el guion a mano.
-4. **Generar**: se crea la voz (según `TTS_ENGINE`), se ajusta al largo del video, se calculan los tiempos por palabra, se arma el `.ass` y se renderiza.
-5. El video aparece en la vista previa 9:16 con botón de descarga; si configuraste Telegram, también te llega allí.
+1. **Paso 1**: eliges el video original y el clip del personaje que aparecerá debajo; el teléfono muestra ambos clips recortados en el diseño final. Define el título y su modo de encuadre.
+2. **Paso 2**: escribes el guion, eliges una voz, el color y el estilo del título, y ajustas subtítulos y duración.
+3. **Generar**: la voz se sintetiza desde el guion (no se solicita una grabación), se ajusta al video, se crean subtítulos y se renderiza.
+4. El resultado aparece en la vista previa 9:16 con botón de descarga; si configuraste Telegram, también te llega allí. Puedes volver al primer paso con **Anterior**.
 
 ## Voz (`TTS_ENGINE`)
 
 | Valor | Qué hace |
 |-------|----------|
-| `none` | Usa tu audio grabado tal cual (ideal para empezar y probar). |
+| Windows local | Usa Sabina (México) o Helena (España) instaladas en Windows; no requiere conexión para generar voz. |
+| `edge` | Voz generada desde el guion con `edge-tts` (incluido en `requirements.txt`). |
 | `elevenlabs` | Convierte el guion a tu voz clonada. Requiere `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`. |
 | `xtts` | Voz clonada local y gratis. `pip install TTS` y una muestra limpia en `XTTS_SPEAKER_WAV`. Pesado: conviene GPU. |
 
 ## Notas importantes
 
-- **Micrófono en el navegador**: solo funciona en `localhost` o con HTTPS.
+- **Narración**: se crea directamente desde el guion con la voz seleccionada; no se pide un archivo de audio.
 - **Fuente**: el estilo usa `Impact`. Si no está instalada, FFmpeg usa otra. Copia un `.ttf` a `assets/fonts/` y pon su nombre en `FONT_NAME`.
 - **Subtítulos karaoke**: cada palabra activa se resalta con una línea propia en amarillo (más fiable que `\k` de ASS).
 - **Audio más largo que el video**: se acelera hasta 1.3x como máximo; si aún sobra, se corta. Acorta el guion si lo notas.
