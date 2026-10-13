@@ -22,6 +22,8 @@ for d in (UPLOADS, AUDIO, WORK, OUTPUT, JOBS):
 
 CHARACTER_CLIP = _path("CHARACTER_CLIP", BASE / "assets" / "personaje_loop.mp4")
 FONTS_DIR = BASE / "assets" / "fonts"
+CHARACTERS_DIR = BASE / "assets" / "characters"
+MUSIC_DIR = BASE / "assets" / "music"
 FONT_NAME = env("FONT_NAME", "Impact")
 
 APP_PASSWORD = env("APP_PASSWORD")

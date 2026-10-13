@@ -9,18 +9,38 @@
 <body>
   <header class="top">
     <div class="logo"><span class="dot"></span> VideoStudio</div>
-    <span id="cfg" class="chip"></span>
+    <div class="row">
+      <span id="cfg" class="chip">Preparando…</span>
+      <button type="button" id="logout" class="ghost" hidden>Salir</button>
+    </div>
   </header>
 
+  <form id="loginPanel" class="login-panel" hidden>
+    <h1>Iniciar sesión</h1>
+    <p>Escribe la contraseña configurada para VideoStudio.</p>
+    <label class="field">Contraseña
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="primary">Entrar</button>
+    <p id="loginError" class="login-error" hidden></p>
+  </form>
+
   <main class="layout">
-    <!-- PANEL IZQUIERDO: pasos -->
     <section class="panel">
+      <nav class="step-nav" aria-label="Pasos del video">
+        <button type="button" data-goto="1" class="on">1 · Video</button>
+        <button type="button" data-goto="3" disabled>2 · Guion y render</button>
+      </nav>
 
       <div class="card" id="c1">
         <h2><i>1</i> Video y título</h2>
         <label class="drop" id="drop">
           <input type="file" id="video" accept="video/*" hidden>
           <span id="dropText">Toca para elegir el video o arrástralo aquí</span>
+        </label>
+        <label class="drop" id="characterDrop">
+          <input type="file" id="characterVideo" accept="video/*" hidden>
+          <span id="characterDropText">Añade el video de tu personaje narrando (obligatorio)</span>
         </label>
         <label class="field">Título (arriba del video)
           <input type="text" id="title" maxlength="120" placeholder="Ej: Stewie tiene un problema">
@@ -31,47 +51,130 @@
             <button type="button" data-v="fit">Completo (sin recortar)</button>
           </div>
         </label>
-      </div>
-
-      <div class="card" id="c2">
-        <h2><i>2</i> Tu narración <small>(opcional)</small></h2>
-        <div class="row">
-          <button type="button" id="rec" class="rec">● Grabar</button>
-          <span id="timer" class="timer">00:00</span>
-          <label class="ghost">Subir audio
-            <input type="file" id="audioFile" accept="audio/*" hidden>
-          </label>
+        <div class="nav-actions">
+          <span></span>
+          <div class="row">
+          <button type="button" class="primary nav-next" id="btnUpload">Subir videos y continuar →</button>
+          </div>
         </div>
-        <audio id="audioPrev" controls hidden></audio>
-        <p class="hint" id="audioHint">Habla sobre el video; se transcribe para que edites el guion. Sin audio, escribe el guion a mano.</p>
-        <button type="button" id="btnUpload" class="primary">Subir y continuar</button>
+        <div class="upload-progress" id="uploadWrap" hidden>
+          <div class="bar"><div id="uploadFill"></div></div>
+          <span id="uploadLabel">Preparando la subida…</span>
+        </div>
       </div>
 
       <div class="card" id="c3" hidden>
-        <h2><i>3</i> Guion de la narración</h2>
-        <textarea id="script" rows="7" placeholder="Aquí aparece la transcripción. Edítala a tu gusto."></textarea>
-        <p class="hint" id="ttsHint"></p>
-        <button type="button" id="btnGen" class="primary">✨ Generar video</button>
+        <h2><i>2</i> Guion y opciones</h2>
+        <label class="field">Guion
+          <textarea id="script" rows="7" placeholder="Escribe o edita aquí el texto de la narración."></textarea>
+        </label>
+        <p id="durationInfo" class="hint duration-info">Escribe tu guion para estimar su duración.</p>
+        <div class="grid-options">
+          <label class="field">Voz
+            <select id="voice"></select>
+          </label>
+          <label class="field">Estilo de voz
+            <select id="voiceStyle"></select>
+          </label>
+          <label class="field">Si la narración es más larga
+            <select id="durationMode">
+              <option value="speed">Acelerar hasta 1.3× (recomendado)</option>
+              <option value="extend">Extender el video con el último fotograma</option>
+              <option value="shorten">Acortaré el guion manualmente</option>
+            </select>
+          </label>
+          <label class="field">Subtítulos
+            <select id="subtitleStyle">
+              <option value="clasico">Clásico</option>
+              <option value="compacto">Compacto</option>
+              <option value="alto_contraste">Alto contraste</option>
+            </select>
+          </label>
+          <label class="field">Palabras por línea
+            <select id="maxWords">
+              <option value="2">2</option><option value="3">3</option>
+              <option value="4" selected>4</option><option value="5">5</option>
+              <option value="6">6</option><option value="7">7</option><option value="8">8</option>
+            </select>
+          </label>
+          <label class="field">Fuente del título
+            <select id="fontName"><option value="Impact">Impact (predeterminada)</option></select>
+          </label>
+          <label class="field">Color del título
+            <select id="titleColor">
+              <option value="verde">Verde brillante</option>
+              <option value="amarillo">Amarillo</option>
+              <option value="blanco">Blanco</option>
+              <option value="cian">Cian</option>
+              <option value="rosa">Rosa</option>
+            </select>
+          </label>
+          <label class="field">Estilo del título
+            <select id="titleStyle">
+              <option value="clasico">Clásico grueso</option>
+              <option value="contorno">Contorno marcado</option>
+              <option value="sombra">Sombra profunda</option>
+            </select>
+          </label>
+          <label class="field">Música de fondo (opcional)
+            <select id="music"><option value="">Sin música</option></select>
+          </label>
+        </div>
+        <p class="hint" id="ttsHint">La narración se crea automáticamente desde el guion; no necesitas subir ni grabar audio.</p>
+        <div class="row">
+          <button type="button" class="ghost" id="btnSample">▶ Escuchar muestra</button>
+          <audio id="sample" controls hidden></audio>
+        </div>
+        <div class="nav-actions">
+          <button type="button" class="ghost" data-goto="1">← Anterior</button>
+          <div class="row">
+            <button type="button" class="ghost" id="btnLive">Vista instantánea</button>
+            <button type="button" class="ghost" id="btnPreview">Renderizar muestra</button>
+            <button type="button" class="primary" id="btnGen">✨ Generar video</button>
+          </div>
+        </div>
       </div>
 
       <div class="card" id="prog" hidden>
         <div class="bar"><div id="barFill"></div></div>
         <p id="status" class="status">Preparando…</p>
+        <button type="button" class="ghost" id="btnCancel">Cancelar trabajo</button>
       </div>
-
       <div class="error" id="error" hidden></div>
+
+      <section class="card history">
+        <div class="history-head">
+          <h2>Historial de videos</h2>
+          <button type="button" class="ghost" id="refreshHistory">Actualizar</button>
+        </div>
+        <div id="historyList" class="history-list"><p class="hint">Aún no hay videos generados.</p></div>
+      </section>
     </section>
 
-    <!-- PANEL DERECHO: vista previa 9:16 -->
     <aside class="preview">
       <div class="phone" id="phone">
-        <div class="zone z-top"><span id="pvTitle">Tu título</span></div>
-        <div class="zone z-mid"><em>Video original</em><b>SUBTÍTULO</b></div>
-        <div class="zone z-bot"><em>Tu personaje</em><b>SU <u>ALMA</u> GEMELA</b></div>
+        <div class="phone-content" id="phoneContent">
+          <div class="zone z-top"><video id="sourceBg" muted loop playsinline></video><span id="pvTitle">Tu título</span></div>
+          <div class="zone z-mid"><video id="sourceInline" muted loop playsinline></video><em>Video original</em></div>
+          <div class="zone z-bot"><video id="characterInline" muted loop playsinline></video><em>Tu personaje narrando</em></div>
+        </div>
+        <video id="finalVideo" controls playsinline hidden></video>
+        <video id="previewVideo" controls playsinline hidden></video>
+        <div class="live" id="live" hidden>
+          <video id="lvBg" muted loop playsinline></video>
+          <video id="lvMid" muted loop playsinline></video>
+          <video id="lvChar" muted loop playsinline></video>
+          <div id="lvTitle"></div><div id="lvSub"></div><div id="lvKar"></div>
+          <audio id="lvAudio"></audio>
+        </div>
+      </div>
+      <div class="row preview-controls" id="liveControls" hidden>
+        <button type="button" class="ghost" id="btnReplay">▶ Reproducir de nuevo</button>
+        <button type="button" class="ghost" id="btnStopLive">Cerrar vista</button>
       </div>
       <div class="actions" id="actions" hidden>
         <a id="dl" class="primary" href="#">⬇ Descargar</a>
-        <button type="button" id="again" class="ghost">Nuevo video</button>
+        <button type="button" class="ghost" id="again">Nuevo video</button>
       </div>
     </aside>
   </main>
