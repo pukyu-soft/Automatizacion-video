@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VideoStudio</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="logo"><span class="dot"></span> VideoStudio</div>
+    <span id="cfg" class="chip"></span>
+  </header>
+
+  <main class="layout">
+    <!-- PANEL IZQUIERDO: pasos -->
+    <section class="panel">
+
+      <div class="card" id="c1">
+        <h2><i>1</i> Video y título</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="video" accept="video/*" hidden>
+          <span id="dropText">Toca para elegir el video o arrástralo aquí</span>
+        </label>
+        <label class="field">Título (arriba del video)
+          <input type="text" id="title" maxlength="120" placeholder="Ej: Stewie tiene un problema">
+        </label>
+        <label class="field">Ajuste del video
+          <div class="seg" id="mode">
+            <button type="button" data-v="fill" class="on">Recortar y llenar</button>
+            <button type="button" data-v="fit">Completo (sin recortar)</button>
+          </div>
+        </label>
+      </div>
+
+      <div class="card" id="c2">
+        <h2><i>2</i> Tu narración <small>(opcional)</small></h2>
+        <div class="row">
+          <button type="button" id="rec" class="rec">● Grabar</button>
+          <span id="timer" class="timer">00:00</span>
+          <label class="ghost">Subir audio
+            <input type="file" id="audioFile" accept="audio/*" hidden>
+          </label>
+        </div>
+        <audio id="audioPrev" controls hidden></audio>
+        <p class="hint" id="audioHint">Habla sobre el video; se transcribe para que edites el guion. Sin audio, escribe el guion a mano.</p>
+        <button type="button" id="btnUpload" class="primary">Subir y continuar</button>
+      </div>
+
+      <div class="card" id="c3" hidden>
+        <h2><i>3</i> Guion de la narración</h2>
+        <textarea id="script" rows="7" placeholder="Aquí aparece la transcripción. Edítala a tu gusto."></textarea>
+        <p class="hint" id="ttsHint"></p>
+        <button type="button" id="btnGen" class="primary">✨ Generar video</button>
+      </div>
+
+      <div class="card" id="prog" hidden>
+        <div class="bar"><div id="barFill"></div></div>
+        <p id="status" class="status">Preparando…</p>
+      </div>
+
+      <div class="error" id="error" hidden></div>
+    </section>
+
+    <!-- PANEL DERECHO: vista previa 9:16 -->
+    <aside class="preview">
+      <div class="phone" id="phone">
+        <div class="zone z-top"><span id="pvTitle">Tu título</span></div>
+        <div class="zone z-mid"><em>Video original</em><b>SUBTÍTULO</b></div>
+        <div class="zone z-bot"><em>Tu personaje</em><b>SU <u>ALMA</u> GEMELA</b></div>
+      </div>
+      <div class="actions" id="actions" hidden>
+        <a id="dl" class="primary" href="#">⬇ Descargar</a>
+        <button type="button" id="again" class="ghost">Nuevo video</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

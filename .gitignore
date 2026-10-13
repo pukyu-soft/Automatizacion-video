@@ -1,0 +1,6 @@
+venv/
+.env
+__pycache__/
+storage/*/*
+!storage/*/.gitkeep
+assets/personaje_loop.mp4
