@@ -5,12 +5,14 @@ from .probe import probe
 
 
 def render(video_in, audio_in, ass_file, duration, out_path, mode="fill", on_progress=None,
-           preview=False, character=None, character_path=None, music=None, source_duration=None, cancelled=None):
+           preview=False, character=None, character_path=None, music=None, source_duration=None, cancelled=None,
+           video_volume=20, narration_volume=100):
     """mode='fill': recorta para llenar el recuadro central. mode='fit': video completo, sin recortar."""
     ass_file = Path(ass_file)
     scale_mode = "increase" if mode == "fill" else "decrease"
     crop = f",crop={W}:{MID_H}" if mode == "fill" else ""
-    source_duration = source_duration or probe(str(video_in))["duration"]
+    source_info = probe(str(video_in))
+    source_duration = source_duration or source_info["duration"]
     extra = max(0.0, duration - source_duration)
     pad = f"tpad=stop_mode=clone:stop_duration={extra:.3f}," if extra > 0.01 else ""
     if character_path:
@@ -44,18 +46,36 @@ def render(video_in, audio_in, ass_file, duration, out_path, mode="fill", on_pro
         f"[t2]ass={ass_file.name}{fonts}{',scale=540:960' if preview else ''}[v]"
     )
     inputs = ["-i", str(video_in), *char_in, "-i", str(audio_in)]
-    audio_map = "2:a"
+    duration_filter = f"apad,atrim=duration={duration:.3f},asetpts=PTS-STARTPTS"
+    audio_filters = [
+        f"[2:a]volume={narration_volume / 100:.3f},{duration_filter}[narration]"
+    ]
+    audio_labels = ["[narration]"]
+    if source_info["has_audio"]:
+        audio_filters.append(
+            f"[0:a:0]volume={video_volume / 100:.3f},{duration_filter}[source_audio]"
+        )
+        audio_labels.append("[source_audio]")
     if music:
         music_path = (MUSIC_DIR / Path(music).name).resolve()
         if music_path.parent != MUSIC_DIR.resolve() or not music_path.is_file():
             raise ValueError("Pista musical no válida.")
         inputs.extend(["-stream_loop", "-1", "-i", str(music_path)])
-        fc += ";[2:a][3:a]amix=inputs=2:duration=first:weights='1 0.12'[a]"
-        audio_map = "[a]"
+        music_index = 3
+        audio_filters.append(
+            f"[{music_index}:a]volume=0.120,{duration_filter}[music]"
+        )
+        audio_labels.append("[music]")
+    fc += ";" + ";".join(audio_filters)
+    fc += (
+        ";" + "".join(audio_labels)
+        + f"amix=inputs={len(audio_labels)}:duration=longest:dropout_transition=0:normalize=0,"
+        "alimiter=limit=0.95[a]"
+    )
 
     preset, crf = ("ultrafast", "32") if preview else ("medium", "20")
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats",
-           *inputs, "-filter_complex", fc, "-map", "[v]", "-map", audio_map,
+           *inputs, "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
            "-t", f"{duration:.3f}", "-c:v", "libx264", "-preset", preset, "-crf", crf,
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out_path)]
 

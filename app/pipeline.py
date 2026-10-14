@@ -1,6 +1,7 @@
 import hashlib
 import threading
 import traceback
+import uuid
 from pathlib import Path
 
 from . import jobs
@@ -50,7 +51,7 @@ def get_tts_audio(script: str, voice: str, style: str = "relajado") -> str:
     path = AUDIO / f"tts_{key}{suffix}"
     with _tts_lock:
         if not path.exists():
-            temporary = path.with_name(path.stem + ".tmp" + suffix)
+            temporary = path.with_name(f"{path.stem}.{uuid.uuid4().hex}.tmp{suffix}")
             try:
                 generated = Path(synthesize(script, str(temporary.with_suffix("")), voice, style))
                 generated.replace(path)
@@ -93,7 +94,8 @@ def _prepare(job_id: str, job: dict, preview: bool = False) -> tuple[str, Path, 
     jobs.update(job_id, status="fitting", progress=40)
     fitted = str(AUDIO / f"{job_id}_fit.wav")
     _, duration = fit_audio(
-        raw, video_duration, fitted, job.get("duration_mode", "speed")
+        raw, video_duration, fitted, job.get("duration_mode", "speed"),
+        job.get("narration_speed", 1.0),
     )
     if preview:
         duration = min(duration, 10.0)
@@ -148,6 +150,8 @@ def step_generate(job_id: str):
             on_progress=lambda p: jobs.update(job_id, progress=int(70 + p * 28)),
             character=job.get("character"), character_path=job.get("character_path"),
             music=job.get("music"),
+            video_volume=job.get("video_volume", 20),
+            narration_volume=job.get("narration_volume", 100),
             source_duration=video_duration, cancelled=lambda: _cancelled(job_id),
         )
         _check_cancel(job_id)
@@ -176,6 +180,8 @@ def step_preview(job_id: str):
             job["video_path"], fitted, ass, duration, out, job.get("mode", "fill"),
             preview=True, character=job.get("character"),
             character_path=job.get("character_path"), music=job.get("music"),
+            video_volume=job.get("video_volume", 20),
+            narration_volume=job.get("narration_volume", 100),
             source_duration=video_duration, cancelled=lambda: _cancelled(job_id),
         )
         _check_cancel(job_id)

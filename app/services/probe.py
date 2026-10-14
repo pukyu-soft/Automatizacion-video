@@ -10,4 +10,5 @@ def probe(path: str) -> dict:
         "width": int(v["width"]) if v else 0,
         "height": int(v["height"]) if v else 0,
         "duration": float(data["format"]["duration"]),
+        "has_audio": any(s["codec_type"] == "audio" for s in data["streams"]),
     }

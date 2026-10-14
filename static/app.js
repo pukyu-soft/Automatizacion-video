@@ -8,7 +8,13 @@ const STATUS = {
 const SETTINGS_KEY = "videostudio-settings-v1";
 let jobId = null, videoFile = null, characterFile = null, uploadedFile = null, uploadedCharacter = null;
 let mode = "fill", poller = null;
-let uploaded = false, scriptReady = false, videoDuration = 0, liveFrame = 0, liveGroups = [];
+let uploaded = false, scriptReady = false, videoDuration = 0, sourceHasAudio = null;
+let liveFrame = 0, liveGroups = [], liveSpeedBaseline = 1;
+let videoGenerated = false, actionInProgress = false;
+
+function syncAudioMixVisibility() {
+  $("#audioMixControls").hidden = $("#c3").hidden || videoGenerated || actionInProgress;
+}
 
 function showError(message) {
   const error = $("#error");
@@ -51,15 +57,20 @@ function bodyOptions() {
     font_name: $("#fontName").value,
     title_color: $("#titleColor").value,
     title_style: $("#titleStyle").value,
-    music: $("#music").value || null
+    music: $("#music").value || null,
+    video_volume: Number($("#videoVolume").value),
+    narration_volume: Number($("#narrationVolume").value),
+    narration_speed: Number($("#narrationSpeed").value) / 100
   };
 }
 function saveSettings() {
   const settings = {
-    voice: $("#voice").value, voiceStyle: $("#voiceStyle").value, mode,
+    voice: $("#voice").value, voiceStyle: $("#voiceStyle").value,
     durationMode: $("#durationMode").value, subtitleStyle: $("#subtitleStyle").value,
     maxWords: $("#maxWords").value, fontName: $("#fontName").value,
-    titleColor: $("#titleColor").value, titleStyle: $("#titleStyle").value, music: $("#music").value
+    titleColor: $("#titleColor").value, titleStyle: $("#titleStyle").value,
+    music: $("#music").value, videoVolume: $("#videoVolume").value,
+    narrationVolume: $("#narrationVolume").value, narrationSpeed: $("#narrationSpeed").value
   };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
   catch (error) { showError("No se pudieron guardar los ajustes en este navegador: " + error.message); }
@@ -68,9 +79,6 @@ function restoreSettings() {
   let settings;
   try { settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); }
   catch { settings = {}; }
-  const useLocalVoice = typeof settings.voice === "string" && settings.voice.startsWith("edge-") &&
-    [...$("#voice").options].some(option => option.value === "sapi-sabina");
-  if (useLocalVoice) settings.voice = "sapi-sabina";
   for (const [key, value] of Object.entries({
     voice: settings.voice, voiceStyle: settings.voiceStyle, durationMode: settings.durationMode,
     subtitleStyle: settings.subtitleStyle, maxWords: settings.maxWords, fontName: settings.fontName,
@@ -78,23 +86,32 @@ function restoreSettings() {
   })) {
     if (value && [...$("#" + key).options].some(option => option.value === value)) $("#" + key).value = value;
   }
-  if (settings.mode) setMode(settings.mode);
+  for (const [id, value] of [
+    ["videoVolume", settings.videoVolume], ["narrationVolume", settings.narrationVolume],
+    ["narrationSpeed", settings.narrationSpeed]
+  ]) {
+    if (Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 200) {
+      $("#" + id).value = Number(value);
+    }
+  }
   $("#pvTitle").dataset.color = $("#titleColor").value;
   $("#pvTitle").dataset.style = $("#titleStyle").value;
-  if (useLocalVoice) {
-    $("#ttsHint").textContent = "Se cambió la voz Edge anterior por Sabina local para evitar fallos de conexión.";
-    saveSettings();
-  }
+  updateVolumeLabels();
 }
 function setMode(value) {
   mode = value;
+  const objectFit = mode === "fit" ? "contain" : "cover";
+  $("#sourceInline").style.objectFit = objectFit;
+  $("#lvMid").style.objectFit = objectFit;
   document.querySelectorAll("#mode button").forEach(button =>
     button.classList.toggle("on", button.dataset.v === mode));
 }
+setMode(mode);
 function showStep(step) {
   if (step === 3 && !scriptReady) return showError("Sube los dos videos en el paso 1 para continuar.");
   $("#c1").hidden = step !== 1;
   $("#c3").hidden = step !== 3;
+  syncAudioMixVisibility();
   document.querySelectorAll(".step-nav button").forEach(button =>
     button.classList.toggle("on", Number(button.dataset.goto) === step));
   hideError();
@@ -280,6 +297,8 @@ async function loadVideoDuration() {
   try {
     const data = await jsonResponse(await fetch(`/api/jobs/${jobId}/duration`));
     videoDuration = data.duration;
+    sourceHasAudio = data.has_audio;
+    updateVolumeLabels();
     updateDurationEstimate();
   } catch (error) { showError(error.message); }
 }
@@ -287,6 +306,27 @@ async function loadVideoDuration() {
 // Paso 3: voz, muestras, vista previa y render final
 ["voice", "voiceStyle", "durationMode", "subtitleStyle", "maxWords", "fontName", "titleColor", "titleStyle", "music"]
   .forEach(id => $("#" + id).addEventListener("change", saveSettings));
+function updateVolumeLabels() {
+  $("#videoVolumeValue").textContent = `${$("#videoVolume").value} %`;
+  $("#narrationVolumeValue").textContent = `${$("#narrationVolume").value} %`;
+  $("#narrationSpeedValue").textContent = `${$("#narrationSpeed").value} %`;
+  $("#lvMid").volume = Math.min(1, Number($("#videoVolume").value) / 100);
+  $("#lvAudio").volume = Math.min(1, Number($("#narrationVolume").value) / 100);
+  $("#lvAudio").playbackRate = Number($("#narrationSpeed").value) / 100 / liveSpeedBaseline;
+  $("#sample").playbackRate = Number($("#narrationSpeed").value) / 100;
+  $("#videoVolume").disabled = sourceHasAudio === false;
+  $("#sourceAudioHint").hidden = sourceHasAudio !== false;
+  if (sourceHasAudio === false) {
+    $("#sourceAudioHint").textContent = "El video central no tiene pista de audio para mezclar.";
+    $("#lvMid").muted = true;
+  } else {
+    $("#lvMid").muted = false;
+  }
+}
+["videoVolume", "narrationVolume", "narrationSpeed"].forEach(id => {
+  $("#" + id).addEventListener("input", updateVolumeLabels);
+  $("#" + id).addEventListener("change", saveSettings);
+});
 
 $("#btnSample").onclick = async () => {
   hideError();
@@ -325,6 +365,8 @@ async function submitAction(action) {
   }
   const button = action === "preview" ? $("#btnPreview") : $("#btnGen");
   button.disabled = true;
+  actionInProgress = true;
+  syncAudioMixVisibility();
   try {
     await jsonResponse(await fetch(`/api/jobs/${jobId}/${action}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -336,6 +378,8 @@ async function submitAction(action) {
   } catch (error) {
     showError(error.message);
     button.disabled = false;
+    actionInProgress = false;
+    showStep(3);
   }
 }
 $("#btnPreview").onclick = () => submitAction("preview");
@@ -352,6 +396,7 @@ async function checkJob() {
     const job = await jsonResponse(await fetch(`/api/jobs/${jobId}`));
     if (job.status === "script_ready") {
       clearInterval(poller);
+      actionInProgress = false;
       $("#prog").hidden = true;
       $("#btnGen").disabled = false;
       $("#btnPreview").disabled = false;
@@ -375,15 +420,19 @@ async function checkJob() {
       refreshHistory();
     } else if (job.status === "error" || job.status === "cancelled") {
       clearInterval(poller);
+      actionInProgress = false;
       $("#prog").hidden = true;
       $("#btnGen").disabled = false;
       $("#btnPreview").disabled = false;
       $("#btnUpload").disabled = false;
       $("#btnUpload").textContent = uploaded ? "Videos subidos" : "Subir videos y continuar →";
+      showStep(3);
       showError(job.error || "Trabajo cancelado.");
       refreshHistory();
     } else if (job.done) {
       clearInterval(poller);
+      actionInProgress = false;
+      videoGenerated = true;
       setBar(100, "¡Listo!");
       $("#prog").hidden = true;
       $("#finalVideo").src = `/api/jobs/${jobId}/video`;
@@ -401,7 +450,9 @@ async function checkJob() {
     }
   } catch (error) {
     clearInterval(poller);
+    actionInProgress = false;
     $("#prog").hidden = true;
+    syncAudioMixVisibility();
     showError(error.message);
   }
 }
@@ -419,11 +470,15 @@ function setPhoneView(view) {
   $("#previewVideo").hidden = view !== "previewVideo";
   $("#live").hidden = view !== "live";
   $("#liveControls").hidden = view !== "live";
+  syncAudioMixVisibility();
 }
 async function startLivePreview() {
   hideError();
   if (!jobId) return showError("Sube el video en los pasos anteriores.");
   const settings = bodyOptions();
+  const button = $("#btnLive");
+  button.disabled = true;
+  liveSpeedBaseline = settings.narration_speed;
   try {
     const data = await jsonResponse(await fetch(`/api/jobs/${jobId}/preview-data`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings)
@@ -433,16 +488,35 @@ async function startLivePreview() {
     $("#lvMid").src = source;
     $("#lvChar").src = `/api/jobs/${jobId}/character`;
     $("#lvAudio").src = `/api/jobs/${jobId}/audio-fit?t=${Date.now()}`;
+    $("#lvMid").muted = sourceHasAudio === false;
+    updateVolumeLabels();
     $("#lvTitle").textContent = $("#title").value.trim();
     $("#lvTitle").dataset.color = $("#titleColor").value;
     $("#lvTitle").dataset.style = $("#titleStyle").value;
     liveGroups = [];
     const words = data.words || [];
-    for (let index = 0; index < words.length; index += 4) liveGroups.push(words.slice(index, index + 4));
+    const wordsPerLine = Number($("#maxWords").value);
+    for (let index = 0; index < words.length; index += wordsPerLine) {
+      liveGroups.push(words.slice(index, index + wordsPerLine));
+    }
     setPhoneView("live");
     $("#lvAudio").currentTime = 0;
-    await $("#lvAudio").play();
-  } catch (error) { showError(error.message); }
+    try {
+      await $("#lvAudio").play();
+    } catch (error) {
+      if (error.name === "NotAllowedError") {
+        button.disabled = false;
+        showError("El navegador bloqueó el audio automático. Pulsa «Reproducir de nuevo» para iniciar la vista.");
+        return;
+      }
+      throw error;
+    }
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    button.disabled = false;
+    showStep(3);
+    showError(error.message);
+  }
 }
 function renderLiveCaptions() {
   const audio = $("#lvAudio"), time = audio.currentTime;
@@ -450,7 +524,6 @@ function renderLiveCaptions() {
     words.length && time >= words[0].start && time <= words[words.length - 1].end
   ) || [];
   const active = group.find(word => time >= word.start && time <= word.end);
-  $("#lvSub").textContent = group.map(word => word.word).join(" ").toUpperCase();
   $("#lvKar").replaceChildren();
   group.forEach((word, index) => {
     if (index) $("#lvKar").append(" ");
@@ -463,19 +536,27 @@ function renderLiveCaptions() {
       $("#lvKar").append(document.createTextNode(text));
     }
   });
+  ["lvBg", "lvMid", "lvChar"].forEach(id => {
+    const video = $("#" + id);
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA || !Number.isFinite(video.duration)) return;
+    const targetTime = time % video.duration;
+    if (Math.abs(video.currentTime - targetTime) > 0.35) video.currentTime = targetTime;
+  });
   if (!audio.paused) liveFrame = requestAnimationFrame(renderLiveCaptions);
 }
 $("#btnLive").onclick = startLivePreview;
 $("#btnReplay").onclick = () => {
   const audio = $("#lvAudio");
   audio.currentTime = 0;
-  audio.play().catch(error => showError(error.message));
+  audio.play().then(hideError).catch(error =>
+    showError("No se pudo reproducir la vista instantánea. " + error.message));
 };
 $("#btnStopLive").onclick = () => {
   cancelAnimationFrame(liveFrame);
   $("#lvAudio").pause();
   ["lvBg", "lvMid", "lvChar"].forEach(id => $("#" + id).pause());
   setPhoneView("phoneContent");
+  $("#btnLive").disabled = false;
 };
 $("#lvAudio").onplay = () => {
   ["lvBg", "lvMid", "lvChar"].forEach(id => $("#" + id).play().catch(() => {}));
