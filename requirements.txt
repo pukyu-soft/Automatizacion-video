@@ -5,4 +5,5 @@ python-dotenv
 requests
 edge-tts
 faster-whisper
+numpy
 # Voz local opcional (pesado): TTS

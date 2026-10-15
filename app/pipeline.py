@@ -96,11 +96,12 @@ def _prepare(job_id: str, job: dict, preview: bool = False) -> tuple[str, Path, 
     _, duration = fit_audio(
         raw, video_duration, fitted, job.get("duration_mode", "speed"),
         job.get("narration_speed", 1.0),
+        job.get("narration_start", 0.0), job.get("narration_end"),
     )
     if preview:
         duration = min(duration, 10.0)
     jobs.update(job_id, status="subtitles", progress=55)
-    words = _words_for(fitted, script, duration)
+    words = job.get("subtitle_words") or _words_for(fitted, script, duration)
     _check_cancel(job_id)
 
     ass = work / "subs.ass"
@@ -111,6 +112,8 @@ def _prepare(job_id: str, job: dict, preview: bool = False) -> tuple[str, Path, 
         font_name=job.get("font_name", "Impact"),
         title_color=job.get("title_color", "verde"),
         title_style=job.get("title_style", "clasico"),
+        subtitle_position_x=job.get("subtitle_position_x", 50),
+        subtitle_position_y=job.get("subtitle_position_y", 94),
     )
     return fitted, ass, duration, video_duration
 

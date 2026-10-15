@@ -18,9 +18,6 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 """
 
 POS_TITLE = (W // 2, TOP_H // 2)
-POS_KARAOKE = (W // 2, H - 120)
-
-
 def _t(sec: float) -> str:
     cs = max(0, round(sec * 100))
     return f"{cs // 360000}:{cs % 360000 // 6000:02d}:{cs % 6000 // 100:02d}.{cs % 100:02d}"
@@ -36,7 +33,8 @@ def _ev(start, end, style, pos, text):
 
 def build_ass(title: str, words: list, duration: float, out_path: str, max_words: int = 4,
               style: str = "clasico", font_name: str = FONT_NAME,
-              title_color: str = "verde", title_style: str = "clasico"):
+              title_color: str = "verde", title_style: str = "clasico",
+              subtitle_position_x: float = 50, subtitle_position_y: float = 94):
     if style not in {"clasico", "compacto", "alto_contraste"}:
         raise ValueError(f"Estilo de subtítulos desconocido: {style}")
     colors = {
@@ -46,6 +44,8 @@ def build_ass(title: str, words: list, duration: float, out_path: str, max_words
     title_styles = {"clasico": ("5", "0"), "contorno": ("8", "0"), "sombra": ("3", "5")}
     if title_color not in colors or title_style not in title_styles:
         raise ValueError("Color o estilo del título no válido.")
+    if not 5 <= subtitle_position_x <= 95 or not 5 <= subtitle_position_y <= 95:
+        raise ValueError("La posición de los subtítulos debe estar entre 5 % y 95 %.")
     font = font_name.replace(",", "")
     title_outline, title_shadow = title_styles[title_style]
     header = HEADER.format(
@@ -66,6 +66,10 @@ def build_ass(title: str, words: list, duration: float, out_path: str, max_words
             end = g[j + 1]["start"] if j + 1 < len(g) else w["end"]
             parts = [("{\\c&H00FFFF&}" + _clean(x["word"]).upper() + "{\\r}") if k == j
                      else _clean(x["word"]).upper() for k, x in enumerate(g)]
-            lines.append(_ev(w["start"], max(end, w["start"] + 0.05), "Karaoke", POS_KARAOKE, " ".join(parts)))
+            position = (
+                round(W * subtitle_position_x / 100),
+                round(H * subtitle_position_y / 100),
+            )
+            lines.append(_ev(w["start"], max(end, w["start"] + 0.05), "Karaoke", position, " ".join(parts)))
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(lines) + "\n")

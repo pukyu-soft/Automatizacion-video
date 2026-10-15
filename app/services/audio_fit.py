@@ -13,6 +13,8 @@ def fit_audio(
     audio_out: str,
     overflow: str = "speed",
     narration_speed: float = 1.0,
+    start: float = 0.0,
+    end: float | None = None,
 ) -> tuple[float, float]:
     """Prepara audio sin perder palabras; devuelve factor de velocidad y duración final."""
     if video_duration <= 0:
@@ -25,12 +27,18 @@ def fit_audio(
             f"y {MAX_NARRATION_SPEED:.2f}×."
         )
 
-    audio_duration = probe(audio_in)["duration"] / narration_speed
+    source_duration = probe(audio_in)["duration"]
+    end = source_duration if end is None else end
+    if (not math.isfinite(start) or not math.isfinite(end)
+            or start < 0 or end > source_duration or end - start < 0.05):
+        raise ValueError("El recorte debe abarcar al menos 0,05 s dentro del audio.")
+
+    audio_duration = (end - start) / narration_speed
     ratio = audio_duration / video_duration
     if overflow == "shorten" and ratio > 1:
         raise ValueError("El guion es más largo que el video; acórtalo o elige acelerar/extender.")
 
-    filters = []
+    filters = [f"atrim=start={start:.6f}:end={end:.6f}", "asetpts=PTS-STARTPTS"]
     if narration_speed != 1.0:
         filters.append(f"atempo={narration_speed:.4f}")
     if overflow == "speed" and ratio > 1.0:

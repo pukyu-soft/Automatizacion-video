@@ -1,3 +1,7 @@
+import subprocess
+
+import numpy as np
+
 from ..config import env
 
 _model = None
@@ -15,7 +19,25 @@ def _get_model():
 
 def transcribe(audio_path: str, language: str = "es"):
     """Devuelve (texto, [{word,start,end}, ...])."""
-    segments, _ = _get_model().transcribe(str(audio_path), language=language, word_timestamps=True)
+    decoded = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-v", "error", "-i", str(audio_path),
+            "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "pipe:1",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if decoded.returncode:
+        detail = decoded.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"No se pudo decodificar el audio: {detail[-1000:]}")
+    audio = np.frombuffer(decoded.stdout, dtype=np.float32)
+    if not audio.size:
+        raise ValueError("El archivo no contiene audio que se pueda transcribir.")
+
+    segments, _ = _get_model().transcribe(
+        audio, language=language, word_timestamps=True
+    )
     words, text = [], []
     for seg in segments:
         text.append(seg.text.strip())
