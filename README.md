@@ -65,9 +65,9 @@ videostudio/
 ## Cómo funciona el flujo web
 
 1. **Paso 1**: eliges el video original y el clip del personaje que aparecerá debajo; el teléfono muestra ambos clips recortados en el diseño final. Define el título y su modo de encuadre.
-2. **Paso 2**: escribes el guion, eliges una voz y configuras subtítulos y duración. En la mezcla de audio junto a la vista previa puedes ajustar en vivo la narración y el audio del video central, escuchar ambos juntos y afinar los niveles antes de generar.
-3. **Generar**: la voz se sintetiza desde el guion (no se solicita una grabación), se mezcla con el audio opcional del video central, se crean subtítulos y se renderiza.
-4. El resultado aparece en la vista previa 9:16 con botón de descarga; si configuraste Telegram, también te llega allí. Puedes volver al primer paso con **Anterior**.
+2. **Paso 2**: escribe el guion, elige una voz y configura subtítulos y duración. Pulsa **Vista instantánea** para escuchar la narración con el audio del video y la música seleccionada. En la línea de tiempo puedes buscar y arrastrar los extremos para recortar; ajusta la velocidad y el volumen de la narración, el volumen del video central y la posición de los subtítulos en la vista. Después pulsa **Generar subtítulos del recorte** para sincronizarlos con el audio editado.
+3. **Generar**: cuando la narración y sus subtítulos estén listos, puedes renderizar una muestra o generar el video. El render utiliza el recorte, velocidad, mezcla y posición de subtítulos elegidos en la vista previa.
+4. El resultado aparece en la vista previa 9:16 con botón de descarga; si configuraste Telegram, también te llega allí. En el historial puedes eliminar individualmente o seleccionar varios trabajos, incluso los que aún se están ejecutando: se cancelan y se borran sus archivos cuando dejan de usarlos. Puedes volver al primer paso con **Anterior**.
 
 ## Voz (`TTS_ENGINE`)
 
@@ -82,7 +82,7 @@ videostudio/
 
 - **Narración**: se crea directamente desde el guion con la voz seleccionada; no se pide un archivo de audio. Los niveles iniciales son 100 % para narración y 20 % para el audio original del video central. Las voces Edge requieren conexión; en Windows también aparecen las voces locales instaladas, incluidas las masculinas disponibles.
 - **Fuente**: el estilo usa `Impact`. Si no está instalada, FFmpeg usa otra. Copia un `.ttf` a `assets/fonts/` y pon su nombre en `FONT_NAME`.
-- **Subtítulos karaoke**: solo se muestra una línea abajo, sincronizada con la narración; la palabra activa se resalta en amarillo (más fiable que `\k` de ASS).
+- **Subtítulos karaoke**: solo se muestra una línea sincronizada con la narración; la palabra activa se resalta en amarillo (más fiable que `\k` de ASS). Su posición se ajusta en la vista previa y también se aplica al video generado.
 - **Audio más largo que el video**: se acelera hasta 1.3x como máximo; si aún sobra, se corta. Acorta el guion si lo notas.
 - **Un render a la vez**: `ThreadPoolExecutor(max_workers=1)` en `app/main.py`.
 - **Seguridad**: pon `APP_PASSWORD` en `.env` antes de exponerlo en tu dominio (y usa HTTPS con Nginx).

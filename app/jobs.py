@@ -10,6 +10,10 @@ from .config import JOBS
 
 _lock = threading.Lock()
 _ID = re.compile(r"^[0-9a-f]{32}$")
+ACTIVE_STATUSES = {
+    "queued", "transcribing", "analyzing", "tts", "fitting", "subtitles",
+    "rendering", "preview", "cancelling",
+}
 
 
 def _file(job_id: str):
@@ -67,3 +71,15 @@ def update(job_id: str, **fields) -> dict:
         job.update(fields)
         _write(job)
     return job
+
+
+def delete_many(job_ids: list[str], before_delete=None) -> list[dict]:
+    with _lock:
+        selected = [_read(job_id) for job_id in job_ids]
+        if any(job.get("status") in ACTIVE_STATUSES for job in selected):
+            raise ValueError("No se pueden eliminar trabajos que siguen ejecutándose.")
+        if before_delete:
+            before_delete(selected)
+        for job_id in job_ids:
+            _file(job_id).unlink()
+    return selected

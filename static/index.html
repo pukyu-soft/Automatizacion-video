@@ -129,6 +129,7 @@
           <button type="button" class="ghost" data-goto="1">← Anterior</button>
           <div class="row">
             <button type="button" class="ghost" id="btnLive">Vista instantánea</button>
+            <button type="button" class="ghost" id="btnGenerateCaptions" disabled>Generar subtítulos del recorte</button>
             <button type="button" class="ghost" id="btnPreview">Renderizar muestra</button>
             <button type="button" class="primary" id="btnGen">✨ Generar video</button>
           </div>
@@ -144,10 +145,14 @@
 
       <section class="card history">
         <div class="history-head">
-          <h2>Historial de videos</h2>
-          <button type="button" class="ghost" id="refreshHistory">Actualizar</button>
+          <h2>Historial</h2>
+          <div class="row">
+            <button type="button" class="ghost" id="selectAllHistory" hidden>Seleccionar todo</button>
+            <button type="button" class="ghost" id="deleteSelectedHistory" hidden disabled>Eliminar seleccionados</button>
+            <button type="button" class="ghost" id="refreshHistory">Actualizar</button>
+          </div>
         </div>
-        <div id="historyList" class="history-list"><p class="hint">Aún no hay videos generados.</p></div>
+        <div id="historyList" class="history-list"><p class="hint">Aún no hay elementos.</p></div>
       </section>
     </section>
 
@@ -165,24 +170,57 @@
           <video id="lvMid" loop playsinline></video>
           <video id="lvChar" muted loop playsinline></video>
           <div id="lvTitle"></div><div id="lvKar"></div>
-          <audio id="lvAudio"></audio>
         </div>
       </div>
       <div class="row preview-controls" id="liveControls" hidden>
+        <audio id="lvAudio" controls hidden></audio>
+        <audio id="lvMusic" loop hidden></audio>
         <button type="button" class="ghost" id="btnReplay">▶ Reproducir de nuevo</button>
         <button type="button" class="ghost" id="btnStopLive">Cerrar vista</button>
       </div>
-      <div class="audio-mix-controls" id="audioMixControls" hidden>
-        <strong>Mezcla de audio</strong>
-        <p class="hint">Escucha la vista instantánea y ajusta estos niveles antes de generar.</p>
-        <label class="field" for="narrationVolume">
-          Narración <output id="narrationVolumeValue" for="narrationVolume">100 %</output>
-          <input id="narrationVolume" type="range" min="0" max="200" step="5" value="100">
-        </label>
+      <div class="audio-editor" id="audioEditor" hidden>
+        <strong>Pista de narración</strong>
+        <p class="hint">Haz clic para recorrer el audio. Arrastra los extremos para recortarlo.</p>
+        <div class="audio-timeline" id="audioTimeline" role="slider" tabindex="0"
+             aria-label="Recorte y posición de reproducción de la narración">
+          <div class="audio-waveform" id="audioWaveform"></div>
+          <div class="audio-selection" id="audioSelection"></div>
+          <div class="audio-playhead" id="audioPlayhead"></div>
+          <button class="trim-handle trim-start" id="trimStartHandle" type="button"
+                  aria-label="Mover inicio del recorte"></button>
+          <button class="trim-handle trim-end" id="trimEndHandle" type="button"
+                  aria-label="Mover final del recorte"></button>
+        </div>
+        <div class="audio-clip-times">
+          <span>Inicio <output id="trimStartValue">0:00</output></span>
+          <span>Fin <output id="trimEndValue">0:00</output></span>
+          <span>Duración <output id="trimDurationValue">0:00</output></span>
+        </div>
         <label class="field" for="narrationSpeed">
-          Velocidad de narración <output id="narrationSpeedValue" for="narrationSpeed">100 %</output>
+          Velocidad <output id="narrationSpeedValue" for="narrationSpeed">100 %</output>
           <input id="narrationSpeed" type="range" min="75" max="125" step="5" value="100">
         </label>
+        <label class="field" for="narrationVolume">
+          Volumen de la narración <output id="narrationVolumeValue" for="narrationVolume">100 %</output>
+          <input id="narrationVolume" type="range" min="0" max="200" step="5" value="100">
+        </label>
+        <p class="hint" id="captionStatus">Recorta y ajusta la velocidad antes de generar los subtítulos.</p>
+      </div>
+      <div class="subtitle-position-controls" id="subtitlePositionControls" hidden>
+        <strong>Posición del subtítulo</strong>
+        <p class="hint">Arrastra el subtítulo en la vista o ajusta su posición aquí.</p>
+        <label class="field" for="subtitlePositionX">
+          Horizontal <output id="subtitlePositionXValue" for="subtitlePositionX">50 %</output>
+          <input id="subtitlePositionX" type="range" min="5" max="95" step="1" value="50">
+        </label>
+        <label class="field" for="subtitlePositionY">
+          Vertical <output id="subtitlePositionYValue" for="subtitlePositionY">94 %</output>
+          <input id="subtitlePositionY" type="range" min="5" max="95" step="1" value="94">
+        </label>
+      </div>
+      <div class="audio-mix-controls" id="audioMixControls" hidden>
+        <strong>Mezcla de audio</strong>
+        <p class="hint">Ajusta el volumen de la narración y del video central.</p>
         <label class="field" for="videoVolume">
           Audio del video central <output id="videoVolumeValue" for="videoVolume">20 %</output>
           <input id="videoVolume" type="range" min="0" max="200" step="5" value="20">
